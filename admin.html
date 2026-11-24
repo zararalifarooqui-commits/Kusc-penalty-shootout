@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Leaderboard admin</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#10131a;color:#f2efe6}
+  main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+  h1{font-size:24px;margin:0 0 6px}
+  p{color:#b9bfcc;margin:0 0 16px;line-height:1.4}
+  button{font:inherit;font-weight:600;border:0;border-radius:6px;padding:10px 14px;cursor:pointer;background:#ffc83d;color:#17120e}
+  button.del{background:#e2483b;color:#fff;padding:6px 10px;font-size:14px}
+  button.ghost{background:#2c3240;color:#f2efe6}
+  .tabs{display:flex;gap:6px;margin:14px 0}
+  .tabs button{flex:1;background:#2c3240;color:#f2efe6}
+  .tabs button[aria-pressed="true"]{background:#ffc83d;color:#17120e}
+  ol{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+  li{display:grid;grid-template-columns:2.5ch 1fr auto auto;gap:10px;align-items:center;background:#1b2030;padding:8px 10px;border-radius:6px}
+  li small{color:#9aa3b5;display:block}
+  .pts{font-weight:700;font-size:20px}
+  #msg{min-height:1.3em;color:#ffc83d;margin:10px 0}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Leaderboard admin</h1>
+  <p>Sign in with the admin Google account to delete fake or rude scores. Players never see this page.</p>
+  <div id="out"><button id="signIn">Sign in with Google</button></div>
+  <div id="in" hidden>
+    <p id="who"></p>
+    <button class="ghost" id="signOut">Sign out</button>
+    <div class="tabs" id="tabs">
+      <button data-m="survive" aria-pressed="true">Sudden Death</button>
+      <button data-m="sharp" aria-pressed="false">Sharpshooter</button>
+      <button data-m="gk" aria-pressed="false">Keeper</button>
+    </div>
+    <div id="msg" role="status"></div>
+    <ol id="list"></ol>
+  </div>
+</main>
+<script type="module">
+const FIREBASE_CONFIG = {"apiKey":"AIzaSyAY_JHkwT1EdBhHlfFt08toXbVkisx8Ac0","authDomain":"kusc-penalty.firebaseapp.com","projectId":"kusc-penalty","storageBucket":"kusc-penalty.firebasestorage.app","messagingSenderId":"621991432448","appId":"1:621991432448:web:26442d4e108e7d2cd823e5"};
+const V = "10.12.2";
+const $ = (id) => document.getElementById(id);
+const msg = (t) => { $("msg").textContent = t; };
+if (!FIREBASE_CONFIG || !FIREBASE_CONFIG.projectId) {
+  $("out").textContent = "Firebase isn't set up in this file yet.";
+} else {
+  const app = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+  const fs = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+  const au = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+  const a = app.initializeApp(FIREBASE_CONFIG);
+  const db = fs.getFirestore(a), auth = au.getAuth(a);
+  let mode = "survive";
+
+  async function load() {
+    msg("Loading…");
+    $("list").innerHTML = "";
+    try {
+      const snap = await fs.getDocs(fs.query(fs.collection(db, "scores_" + mode), fs.orderBy("pts", "desc"), fs.limit(100)));
+      msg(snap.empty ? "No scores yet." : snap.size + " scores (highest first)");
+      let i = 0;
+      snap.forEach((d) => {
+        const v = d.data();
+        const li = document.createElement("li");
+        const rk = document.createElement("span"); rk.textContent = ++i;
+        const nm = document.createElement("span"); nm.textContent = v.name || "?";
+        const sm = document.createElement("small");
+        sm.textContent = (v.college || "") + " · " + (v.diff || "") + (v.at && v.at.toDate ? " · " + v.at.toDate().toLocaleString() : "");
+        nm.appendChild(sm);
+        const pt = document.createElement("span"); pt.className = "pts"; pt.textContent = v.pts;
+        const del = document.createElement("button"); del.className = "del"; del.textContent = "Delete";
+        del.addEventListener("click", async () => {
+          del.disabled = true;
+          try { await fs.deleteDoc(d.ref); li.remove(); msg("Deleted " + (v.name || "score") + "."); }
+          catch (e) { del.disabled = false; msg("Couldn't delete. Is this the admin account?"); }
+        });
+        li.append(rk, nm, pt, del);
+        $("list").appendChild(li);
+      });
+    } catch (e) { msg("Couldn't load scores: " + (e.code || e.message)); }
+  }
+
+  $("signIn").addEventListener("click", async () => {
+    try { await au.signInWithPopup(auth, new au.GoogleAuthProvider()); }
+    catch (e) { $("out").append(" Sign-in failed: " + (e.code || e.message)); }
+  });
+  $("signOut").addEventListener("click", () => au.signOut(auth));
+  $("tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    mode = b.dataset.m;
+    $("tabs").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    load();
+  }));
+  au.onAuthStateChanged(auth, (u) => {
+    $("out").hidden = !!u; $("in").hidden = !u;
+    if (u) { $("who").textContent = "Signed in as " + u.email; load(); }
+  });
+}
+</script>
+</body>
+</html>
