@@ -2284,7 +2284,7 @@ function lbPostOnline(m,e){
   return withTimeout(LB.db.collection("scores").add({name:e.name,college:e.college,mode:m,pts:e.pts,diff:e.diff,at:e.at}),10000).then(function(){LB.mine=e.name.toLowerCase();return"ok"});
 }
 function lbFetchOnline(m){
-  return withTimeout(LB.db.collection("scores").where("mode","==",m).orderBy("pts","desc").limit(60).get(),10000).then(function(snap){
+  return withTimeout(LB.db.collection("scores").where("mode","==",m).orderBy("pts","desc").limit(20).get(),10000).then(function(snap){
     var out=[],seen={};
     snap.docs.forEach(function(d){
       var v=d.data()||{},pts=v.pts,nm=cleanName(v.name)||"Player",key=nm.toLowerCase();
